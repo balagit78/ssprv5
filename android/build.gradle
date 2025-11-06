@@ -1,0 +1,98 @@
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // Add Firebase Google Services plugin
+        classpath 'com.google.gms:google-services:4.4.2'
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.buildDir = '../build'
+
+// Set compileSdkVersion for all projects early
+ext.compileSdkVersion = 35
+ext.targetSdkVersion = 35
+
+subprojects {
+    // Set compileSdkVersion before evaluation
+    project.ext.compileSdkVersion = rootProject.ext.compileSdkVersion
+    project.ext.targetSdkVersion = rootProject.ext.targetSdkVersion
+    
+    afterEvaluate { project ->
+        if (project.hasProperty("kotlin")) {
+            project.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).all {
+                kotlinOptions {
+                    jvmTarget = "17"
+                }
+            }
+        }
+        
+        // Ensure all Android projects use compileSdkVersion 35
+        if (project.hasProperty('android')) {
+            project.android {
+                compileSdkVersion rootProject.ext.compileSdkVersion
+            }
+        }
+    }
+}
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
+}
+
+// Fix for sqflite_android BAKLAVA issue
+// Patch the problematic file before compilation
+tasks.register("patchSqfliteAndroid") {
+    doLast {
+        def pubCachePath = System.getenv('PUB_CACHE') ?: "${System.getProperty('user.home')}/AppData/Local/Pub/Cache/hosted/pub.dev"
+        def sqfliteAndroidPath = "${pubCachePath}/sqflite_android-2.4.2+2/android/src/main/java/com/tekartik/sqflite/Utils.java"
+        def file = new File(sqfliteAndroidPath)
+        if (file.exists()) {
+            def content = file.text
+            // Replace BAKLAVA with numeric 34
+            content = content.replaceAll('Build\\.VERSION_CODES\\.BAKLAVA', '34')
+            // Fix Locale.of() which doesn't exist - use constructor instead
+            content = content.replaceAll('return Locale\\.of\\(language, country, variant\\);', 'return new Locale(language, country, variant);')
+            // Fix Thread.threadId() which doesn't exist in Android - use getId() instead
+            content = content.replaceAll('return thread\\.threadId\\(\\);', 'return thread.getId();')
+            file.write(content)
+            println "Patched sqflite_android Utils.java: Fixed BAKLAVA, Locale.of(), and Thread.threadId()"
+        } else {
+            println "Warning: sqflite_android Utils.java not found at $sqfliteAndroidPath"
+            // Try alternative path
+            def altPath = "${System.getProperty('user.home')}/.pub-cache/hosted/pub.dev/sqflite_android-2.4.2+2/android/src/main/java/com/tekartik/sqflite/Utils.java"
+            def altFile = new File(altPath)
+            if (altFile.exists()) {
+                def content = altFile.text
+                content = content.replaceAll('Build\\.VERSION_CODES\\.BAKLAVA', '34')
+                content = content.replaceAll('return Locale\\.of\\(language, country, variant\\);', 'return new Locale(language, country, variant);')
+                content = content.replaceAll('return thread\\.threadId\\(\\);', 'return thread.getId();')
+                altFile.write(content)
+                println "Patched sqflite_android Utils.java at alternative path"
+            }
+        }
+    }
+}
+
+// Make compilation depend on the patch
+subprojects {
+    afterEvaluate { project ->
+        if (project.name == 'sqflite_android') {
+            project.tasks.matching { it.name.contains('compile') }.all {
+                it.dependsOn rootProject.tasks.named('patchSqfliteAndroid')
+            }
+        }
+    }
+}
+
+tasks.register("clean", Delete) {
+    delete rootProject.layout.buildDirectory
+}

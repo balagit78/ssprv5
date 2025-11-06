@@ -1,0 +1,33 @@
+﻿# Flutter
+.dart_tool/
+.packages
+.metadata
+**/build/
+**/.generated/
+
+# Android
+android/.gradle/
+android/local.properties
+android/app/release/
+android/app/debug/
+*.keystore
+key.properties
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/ephemeral/
+Runner.xcworkspace/xcuserdata/
+**/DerivedData/
+
+# Java / NetBeans
+target/
+dist/
+nbproject/private/
+*.iml
+
+# IDE / OS
+.idea/
+.DS_Store
+Thumbs.db
+*.log
